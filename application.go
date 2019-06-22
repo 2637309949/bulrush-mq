@@ -12,52 +12,49 @@ import (
 	"github.com/thoas/go-funk"
 )
 
-type (
-	// MQ defined message queue struct
-	MQ struct {
-		bulrush.PNBase
-		Model      Model
-		Exector    []Exector
-		TypeTactic []TypeTactic
-		Interval   []chan bool
-	}
-	// Model defined model store
-	Model interface {
-		Save(Message)
-		Find(string, string) []Message
-		Count(string, string) uint
-		Update(Message, string) error
-	}
-	// Message defined message entity struct
-	Message struct {
-		ID        int
-		Type      string
-		Body      map[string]interface{}
-		Status    string
-		CreatedAt time.Time
-	}
-	// Exector defined loop handler
-	Exector struct {
-		Type    string
-		Handler func(Message) error
-	}
-	// Tactic defined interval type
-	Tactic struct {
-		Interval int
-		CTCount  uint
-	}
-	// TypeTactic defined interval type
-	TypeTactic struct {
-		Type   string
-		Tactic Tactic
-	}
-)
+// MQ defined message queue struct
+type MQ struct {
+	bulrush.PNBase
+	Model      Model
+	Exector    []Exector
+	TypeTactic []TypeTactic
+	Interval   []chan bool
+}
 
-type sortByMsAt []Message
+// Model defined model store
+type Model interface {
+	Save(Message)
+	Find(string, string) []Message
+	Count(string, string) uint
+	Update(Message, string) error
+}
 
-func (a sortByMsAt) Len() int           { return len(a) }
-func (a sortByMsAt) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortByMsAt) Less(i, j int) bool { return a[i].CreatedAt.Unix() < a[j].CreatedAt.Unix() }
+// Message defined message entity struct
+type Message struct {
+	ID        int
+	Type      string
+	Body      map[string]interface{}
+	Status    string
+	CreatedAt time.Time
+}
+
+// Exector defined loop handler
+type Exector struct {
+	Type    string
+	Handler func(Message) error
+}
+
+// Tactic defined interval type
+type Tactic struct {
+	Interval int
+	CTCount  uint
+}
+
+// TypeTactic defined interval type
+type TypeTactic struct {
+	Type   string
+	Tactic Tactic
+}
 
 const (
 	// INIT status
@@ -73,29 +70,26 @@ const (
 // New defined obtain a MQ
 func New() *MQ {
 	mq := &MQ{}
-	mq.TypeTactic = append(mq.TypeTactic, TypeTactic{
-		Tactic: Tactic{
-			Interval: 3,
-			CTCount:  1,
-		},
-	})
-	mq.loop()
+	mq.TypeTactic = append(mq.TypeTactic, DEFAULTTYPETACTIC)
 	mq.Model = &MemoModel{}
+	mq.loop()
 	return mq
 }
 
 // SetModel set mq model
-func (mq *MQ) SetModel(m Model) {
-	mq.Model = m
+func (mq *MQ) SetModel(model Model) *MQ {
+	mq.Model = model
+	return mq
 }
 
 // AddTactics add Tactics to system
 func (mq *MQ) AddTactics(tp string, tac Tactic) *MQ {
-	one := funk.Find(mq.TypeTactic, func(tc TypeTactic) bool {
+	typeTac := funk.Find(mq.TypeTactic, func(tc TypeTactic) bool {
 		return tc.Type == tp
 	})
-	if one != nil {
-		typeOne := one.(TypeTactic)
+	if typeTac != nil {
+		RushLogger.Info("rewrite Tactic strategy %v", typeTac)
+		typeOne := typeTac.(TypeTactic)
 		typeOne.Tactic = tac
 	} else {
 		mq.TypeTactic = append(mq.TypeTactic, TypeTactic{
@@ -106,13 +100,14 @@ func (mq *MQ) AddTactics(tp string, tac Tactic) *MQ {
 	return mq
 }
 
-// loop events
-func (mq *MQ) loop() {
-	// stop all interval
+func (mq *MQ) stopTactic() *MQ {
 	for _, inv := range mq.Interval {
 		inv <- true
 	}
-	// start all interval
+	return mq
+}
+
+func (mq *MQ) startTactic() *MQ {
 	for _, tac := range mq.TypeTactic {
 		setInterval(func() {
 			ctCount := tac.Tactic.CTCount
@@ -154,6 +149,16 @@ func (mq *MQ) loop() {
 			}
 		}, time.Duration(tac.Tactic.Interval)*time.Second)
 	}
+	return mq
+}
+
+// loop events
+func (mq *MQ) loop() *MQ {
+	// 1. stop all tactic
+	mq.stopTactic()
+	// 2. restart all tactic
+	mq.startTactic()
+	return mq
 }
 
 // Push events
@@ -164,8 +169,9 @@ func (mq *MQ) Push(mess Message) {
 }
 
 // Register event handler
-func (mq *MQ) Register(tp string, handler func(Message) error) {
+func (mq *MQ) Register(tp string, handler func(Message) error) *MQ {
 	mq.Exector = append(mq.Exector, Exector{Type: tp, Handler: handler})
+	return mq
 }
 
 // Plugin defined Mq Plugin
