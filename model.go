@@ -5,6 +5,8 @@
 package mq
 
 import (
+	"math/rand"
+
 	"github.com/thoas/go-funk"
 )
 
@@ -16,6 +18,7 @@ type MemoModel struct {
 
 // Save defined store message
 func (m *MemoModel) Save(mes Message) {
+	mes.ID = rand.Int()
 	m.mess = append(m.mess, mes)
 }
 
@@ -36,9 +39,11 @@ func (m *MemoModel) Count(mtype string, status string) uint {
 
 // Update defined update message
 func (m *MemoModel) Update(ms Message, status string) error {
-	mess := funk.Find(m.mess, func(mes Message) bool {
-		return mes.Type == ms.Type && mes.Status == ms.Status
-	}).(Message)
-	mess.Status = status
+	for i, mes := range m.mess {
+		if mes.ID == ms.ID {
+			mes.Status = status
+			m.mess[i].Status = status
+		}
+	}
 	return nil
 }

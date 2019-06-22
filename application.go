@@ -79,6 +79,8 @@ func New() *MQ {
 			CTCount:  1,
 		},
 	})
+	mq.loop()
+	mq.Model = &MemoModel{}
 	return mq
 }
 
@@ -107,28 +109,24 @@ func (mq *MQ) AddTactics(tp string, tac Tactic) *MQ {
 // loop events
 func (mq *MQ) loop() {
 	// stop all interval
-	RushLogger.Info("stop all interval")
 	for _, inv := range mq.Interval {
 		inv <- true
 	}
-	RushLogger.Info("start all interval")
 	// start all interval
 	for _, tac := range mq.TypeTactic {
-		RushLogger.Info("start tac %v", tac)
-		interval := tac.Tactic.Interval
-		ctCount := tac.Tactic.CTCount
-		ttype := tac.Type
 		setInterval(func() {
+			ctCount := tac.Tactic.CTCount
+			ttype := tac.Type
 			var exector []Exector
 			if ttype == "" {
 				exector = funk.Filter(mq.Exector, func(exe Exector) bool {
-					return exe.Type == ttype
+					return funk.Find(mq.TypeTactic, func(ttc TypeTactic) bool {
+						return ttc.Type == exe.Type
+					}) == nil
 				}).([]Exector)
 			} else {
 				exector = funk.Filter(mq.Exector, func(exe Exector) bool {
-					return funk.Filter(mq.TypeTactic, func(ttc TypeTactic) bool {
-						return ttc.Type == exe.Type
-					}) != nil
+					return exe.Type == ttype
 				}).([]Exector)
 			}
 			for _, exec := range exector {
@@ -137,22 +135,24 @@ func (mq *MQ) loop() {
 				pTaskCount := mq.Model.Count(handlerType, PROCESSING)
 				iTask := mq.Model.Find(handlerType, INIT)
 				sort.Sort(sortByMsAt(iTask))
-				task := iTask[0]
-				if pTaskCount < ctCount && task.Type != "" {
-					err := mq.Model.Update(task, PROCESSING)
-					if err != nil {
-						mq.Model.Update(task, FAILED)
-					} else {
-						err := handler(task)
+				if len(iTask) >= 1 {
+					task := iTask[0]
+					if pTaskCount < ctCount {
+						err := mq.Model.Update(task, PROCESSING)
 						if err != nil {
 							mq.Model.Update(task, FAILED)
 						} else {
-							mq.Model.Update(task, SUCCEED)
+							err := handler(task)
+							if err != nil {
+								mq.Model.Update(task, FAILED)
+							} else {
+								mq.Model.Update(task, SUCCEED)
+							}
 						}
 					}
 				}
 			}
-		}, time.Duration(interval)*time.Second)
+		}, time.Duration(tac.Tactic.Interval)*time.Second)
 	}
 }
 
