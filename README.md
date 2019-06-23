@@ -1,4 +1,8 @@
-# bulrush-mq
+## bulrush-mq
+	Lightweight queue to improve system throughput
+
+### Example
+
 ```go
 // @Summary MQ测试
 // @Description MQ测试
@@ -29,6 +33,20 @@ func RegisterMq(router *gin.RouterGroup, event events.EventEmmiter, ri *bulrush.
 	ri.Register(mqHello)
 }
 ```
+
+### API
+
+```go
+// set diff property if you want
+type MQ struct {
+	bulrush.PNBase
+	Model      Model
+	Exector    []Exector
+	TypeTactic []TypeTactic
+	Interval   []chan bool
+}
+```
+
 ## MIT License
 
 Copyright (c) 2018-2020 Double
