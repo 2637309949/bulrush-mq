@@ -88,7 +88,7 @@ func (mq *MQ) AddTactics(tp string, tac Tactic) *MQ {
 		return tc.Type == tp
 	})
 	if typeTac != nil {
-		RushLogger.Info("rewrite Tactic strategy %v", typeTac)
+		rushLogger.Info("rewrite Tactic strategy %v", typeTac)
 		typeOne := typeTac.(TypeTactic)
 		typeOne.Tactic = tac
 	} else {

@@ -5,14 +5,8 @@
 package mq
 
 import (
-	"github.com/2637309949/bulrush-addition/logger"
+	addition "github.com/2637309949/bulrush-addition"
 )
 
-// RushLogger just for console log
-var RushLogger = logger.CreateLogger(logger.SILLYLevel, nil,
-	[]*logger.Transport{
-		&logger.Transport{
-			Level: logger.SILLYLevel,
-		},
-	},
-)
+// rushLogger just for console log
+var rushLogger = addition.RushLogger
