@@ -8,13 +8,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/2637309949/bulrush"
 	"github.com/thoas/go-funk"
 )
 
 // MQ defined message queue struct
 type MQ struct {
-	bulrush.PNBase
 	Model      Model
 	Exector    []Exector
 	TypeTactic []TypeTactic
@@ -175,8 +173,6 @@ func (mq *MQ) Register(tp string, handler func(Message) error) *MQ {
 }
 
 // Plugin defined Mq Plugin
-func (mq *MQ) Plugin() interface{} {
-	return func() *MQ {
-		return mq
-	}
+func (mq *MQ) Plugin() *MQ {
+	return mq
 }
