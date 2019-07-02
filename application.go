@@ -175,7 +175,7 @@ func (mq *MQ) Register(tp string, handler func(Message) error) *MQ {
 }
 
 // Plugin defined Mq Plugin
-func (mq *MQ) Plugin() bulrush.PNRet {
+func (mq *MQ) Plugin() interface{} {
 	return func() *MQ {
 		return mq
 	}
