@@ -11,49 +11,6 @@ import (
 	"github.com/thoas/go-funk"
 )
 
-// MQ defined message queue struct
-type MQ struct {
-	Model      Model
-	Exector    []Exector
-	TypeTactic []TypeTactic
-	Interval   []chan bool
-}
-
-// Model defined model store
-type Model interface {
-	Save(Message)
-	Find(string, string) []Message
-	Count(string, string) uint
-	Update(Message, string) error
-}
-
-// Message defined message entity struct
-type Message struct {
-	ID        int
-	Type      string
-	Body      map[string]interface{}
-	Status    string
-	CreatedAt time.Time
-}
-
-// Exector defined loop handler
-type Exector struct {
-	Type    string
-	Handler func(Message) error
-}
-
-// Tactic defined interval type
-type Tactic struct {
-	Interval int
-	CTCount  uint
-}
-
-// TypeTactic defined interval type
-type TypeTactic struct {
-	Type   string
-	Tactic Tactic
-}
-
 const (
 	// INIT status
 	INIT = "INIT"
@@ -63,6 +20,46 @@ const (
 	SUCCEED = "SUCCEED"
 	// FAILED status
 	FAILED = "FAILED"
+)
+
+type (
+	// MQ defined message queue struct
+	MQ struct {
+		Model      Model
+		Exector    []Exector
+		TypeTactic []TypeTactic
+		Interval   []chan bool
+	}
+	// Model defined model store
+	Model interface {
+		Save(Message)
+		Find(string, string) []Message
+		Count(string, string) uint
+		Update(Message, string) error
+	}
+	// Message defined message entity struct
+	Message struct {
+		ID        int
+		Type      string
+		Body      map[string]interface{}
+		Status    string
+		CreatedAt time.Time
+	}
+	// Exector defined loop handler
+	Exector struct {
+		Type    string
+		Handler func(Message) error
+	}
+	// Tactic defined interval type
+	Tactic struct {
+		Interval int
+		CTCount  uint
+	}
+	// TypeTactic defined interval type
+	TypeTactic struct {
+		Type   string
+		Tactic Tactic
+	}
 )
 
 // New defined obtain a MQ
@@ -99,14 +96,14 @@ func (mq *MQ) AddTactics(tp string, tac Tactic) *MQ {
 }
 
 func (mq *MQ) stopTactic() *MQ {
-	for _, inv := range mq.Interval {
+	funk.ForEach(mq.Interval, func(inv chan bool) {
 		inv <- true
-	}
+	})
 	return mq
 }
 
 func (mq *MQ) startTactic() *MQ {
-	for _, tac := range mq.TypeTactic {
+	funk.ForEach(mq.TypeTactic, func(tac TypeTactic) {
 		setInterval(func() {
 			ctCount := tac.Tactic.CTCount
 			ttype := tac.Type
@@ -122,7 +119,7 @@ func (mq *MQ) startTactic() *MQ {
 					return exe.Type == ttype
 				}).([]Exector)
 			}
-			for _, exec := range exector {
+			funk.ForEach(exector, func(exec Exector) {
 				handler := exec.Handler
 				handlerType := exec.Type
 				pTaskCount := mq.Model.Count(handlerType, PROCESSING)
@@ -144,9 +141,9 @@ func (mq *MQ) startTactic() *MQ {
 						}
 					}
 				}
-			}
+			})
 		}, time.Duration(tac.Tactic.Interval)*time.Second)
-	}
+	})
 	return mq
 }
 
