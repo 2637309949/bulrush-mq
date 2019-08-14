@@ -52,8 +52,10 @@ type (
 	}
 	// Tactic defined interval type
 	Tactic struct {
+		// Interval every interval do work
 		Interval int
-		CTCount  uint
+		// CTCount defined all count in aount
+		CTCount uint
 	}
 	// TypeTactic defined interval type
 	TypeTactic struct {
@@ -92,19 +94,21 @@ func (mq *MQ) AddTactics(tp string, tac Tactic) *MQ {
 			Tactic: tac,
 		})
 	}
+	go mq.loop()
 	return mq
 }
 
 func (mq *MQ) stopTactic() *MQ {
-	funk.ForEach(mq.Interval, func(inv chan bool) {
-		inv <- true
+	funk.ForEach(mq.Interval, func(timer chan bool) {
+		timer <- true
+		close(timer)
 	})
 	return mq
 }
 
 func (mq *MQ) startTactic() *MQ {
 	funk.ForEach(mq.TypeTactic, func(tac TypeTactic) {
-		setInterval(func() {
+		timer := setInterval(func() {
 			ctCount := tac.Tactic.CTCount
 			ttype := tac.Type
 			var exector []Exector
@@ -143,6 +147,7 @@ func (mq *MQ) startTactic() *MQ {
 				}
 			})
 		}, time.Duration(tac.Tactic.Interval)*time.Second)
+		mq.Interval = append(mq.Interval, timer)
 	})
 	return mq
 }
@@ -151,7 +156,6 @@ func (mq *MQ) startTactic() *MQ {
 func (mq *MQ) loop() *MQ {
 	// 1. stop all tactic
 	mq.stopTactic()
-	// 2. restart all tactic
 	mq.startTactic()
 	return mq
 }
