@@ -32,7 +32,7 @@ func setInterval(what func(), delay time.Duration) chan bool {
 // DEFAULTTYPETACTIC defined default Tactic
 var DEFAULTTYPETACTIC = TypeTactic{
 	Tactic: Tactic{
-		Interval: 3,
-		CTCount:  1,
+		Interval:   3,
+		AsyncCount: 1,
 	},
 }

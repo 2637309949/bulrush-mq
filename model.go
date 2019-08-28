@@ -6,31 +6,46 @@ package mq
 
 import (
 	"math/rand"
+	"sort"
 
 	"github.com/thoas/go-funk"
 )
 
-// MemoModel defined memory model
-type MemoModel struct {
-	Model
-	mess []Message
-}
+// Memo defined memory model
+type (
+	Memo struct {
+		Model
+		mess []Message
+	}
+	// Model defined model store
+	Model interface {
+		Save(Message)
+		Find(string, string) *Message
+		Count(string, string) uint
+		Update(*Message, string) error
+	}
+)
 
 // Save defined store message
-func (m *MemoModel) Save(mes Message) {
+func (m *Memo) Save(mes Message) {
 	mes.ID = rand.Int()
 	m.mess = append(m.mess, mes)
 }
 
 // Find defined find message
-func (m *MemoModel) Find(mtype string, status string) []Message {
-	return funk.Filter(m.mess, func(mes Message) bool {
+func (m *Memo) Find(mtype string, status string) *Message {
+	iTask := funk.Filter(m.mess, func(mes Message) bool {
 		return mes.Type == mtype && mes.Status == status
 	}).([]Message)
+	sort.Sort(sortByMsAt(iTask))
+	if len(iTask) >= 1 {
+		return &iTask[0]
+	}
+	return nil
 }
 
 // Count defined count message
-func (m *MemoModel) Count(mtype string, status string) uint {
+func (m *Memo) Count(mtype string, status string) uint {
 	mess := funk.Filter(m.mess, func(mes Message) bool {
 		return mes.Type == mtype && mes.Status == status
 	}).([]Message)
@@ -38,7 +53,7 @@ func (m *MemoModel) Count(mtype string, status string) uint {
 }
 
 // Update defined update message
-func (m *MemoModel) Update(ms Message, status string) error {
+func (m *Memo) Update(ms *Message, status string) error {
 	for i, mes := range m.mess {
 		if mes.ID == ms.ID {
 			mes.Status = status

@@ -5,7 +5,6 @@
 package mq
 
 import (
-	"sort"
 	"time"
 
 	"github.com/thoas/go-funk"
@@ -30,13 +29,6 @@ type (
 		TypeTactic []TypeTactic
 		Interval   []chan bool
 	}
-	// Model defined model store
-	Model interface {
-		Save(Message)
-		Find(string, string) []Message
-		Count(string, string) uint
-		Update(Message, string) error
-	}
 	// Message defined message entity struct
 	Message struct {
 		ID        int
@@ -48,14 +40,14 @@ type (
 	// Exector defined loop handler
 	Exector struct {
 		Type    string
-		Handler func(Message) error
+		Handler func(*Message) error
 	}
 	// Tactic defined interval type
 	Tactic struct {
 		// Interval every interval do work
 		Interval int
-		// CTCount defined all count in aount
-		CTCount uint
+		// AsyncCount defined all count in aount
+		AsyncCount uint
 	}
 	// TypeTactic defined interval type
 	TypeTactic struct {
@@ -68,7 +60,7 @@ type (
 func New() *MQ {
 	mq := &MQ{}
 	mq.TypeTactic = append(mq.TypeTactic, DEFAULTTYPETACTIC)
-	mq.Model = &MemoModel{}
+	mq.Model = &Memo{}
 	mq.loop()
 	return mq
 }
@@ -81,14 +73,17 @@ func (mq *MQ) SetModel(model Model) *MQ {
 
 // AddTactics add Tactics to system
 func (mq *MQ) AddTactics(tp string, tac Tactic) *MQ {
-	typeTac := funk.Find(mq.TypeTactic, func(tc TypeTactic) bool {
-		return tc.Type == tp
+	target := funk.Find(mq.TypeTactic, func(ttc TypeTactic) bool {
+		return ttc.Type == tp
 	})
-	if typeTac != nil {
-		rushLogger.Info("rewrite Tactic strategy %v", typeTac)
-		typeOne := typeTac.(TypeTactic)
+	if target != nil {
+		rushLogger.Info("rewrite Tactic strategy %v", target)
+		typeOne := target.(TypeTactic)
 		typeOne.Tactic = tac
 	} else {
+		if tac.AsyncCount == 0 {
+			tac.AsyncCount = 1
+		}
 		mq.TypeTactic = append(mq.TypeTactic, TypeTactic{
 			Type:   tp,
 			Tactic: tac,
@@ -98,18 +93,21 @@ func (mq *MQ) AddTactics(tp string, tac Tactic) *MQ {
 	return mq
 }
 
+// stopTactic defined stop all tick
 func (mq *MQ) stopTactic() *MQ {
 	funk.ForEach(mq.Interval, func(timer chan bool) {
 		timer <- true
 		close(timer)
 	})
+	mq.Interval = make([]chan bool, 0)
 	return mq
 }
 
+// stopTactic defined start all tick
 func (mq *MQ) startTactic() *MQ {
 	funk.ForEach(mq.TypeTactic, func(tac TypeTactic) {
 		timer := setInterval(func() {
-			ctCount := tac.Tactic.CTCount
+			AsyncCount := tac.Tactic.AsyncCount
 			ttype := tac.Type
 			var exector []Exector
 			if ttype == "" {
@@ -127,21 +125,17 @@ func (mq *MQ) startTactic() *MQ {
 				handler := exec.Handler
 				handlerType := exec.Type
 				pTaskCount := mq.Model.Count(handlerType, PROCESSING)
-				iTask := mq.Model.Find(handlerType, INIT)
-				sort.Sort(sortByMsAt(iTask))
-				if len(iTask) >= 1 {
-					task := iTask[0]
-					if pTaskCount < ctCount {
-						err := mq.Model.Update(task, PROCESSING)
+				message := mq.Model.Find(handlerType, INIT)
+				if message != nil && pTaskCount < AsyncCount {
+					err := mq.Model.Update(message, PROCESSING)
+					if err != nil {
+						mq.Model.Update(message, FAILED)
+					} else {
+						err := handler(message)
 						if err != nil {
-							mq.Model.Update(task, FAILED)
+							mq.Model.Update(message, FAILED)
 						} else {
-							err := handler(task)
-							if err != nil {
-								mq.Model.Update(task, FAILED)
-							} else {
-								mq.Model.Update(task, SUCCEED)
-							}
+							mq.Model.Update(message, SUCCEED)
 						}
 					}
 				}
@@ -154,7 +148,6 @@ func (mq *MQ) startTactic() *MQ {
 
 // loop events
 func (mq *MQ) loop() *MQ {
-	// 1. stop all tactic
 	mq.stopTactic()
 	mq.startTactic()
 	return mq
@@ -168,7 +161,7 @@ func (mq *MQ) Push(mess Message) {
 }
 
 // Register event handler
-func (mq *MQ) Register(tp string, handler func(Message) error) *MQ {
+func (mq *MQ) Register(tp string, handler func(*Message) error) *MQ {
 	mq.Exector = append(mq.Exector, Exector{Type: tp, Handler: handler})
 	return mq
 }
